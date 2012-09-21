@@ -672,6 +672,14 @@ def do_image_delete(cs, args):
     type=int,
     const=1,
     help=argparse.SUPPRESS)
+@utils.arg('--tenant',
+    #nova db searches by project_id
+    dest='tenant',
+    metavar='<tenant>',
+    nargs='?',
+    type=int,
+    const=1,
+    help='Display information from single tenant (Admin only).')
 def do_list(cs, args):
     """List active servers."""
     all_tenants = int(os.environ.get("ALL_TENANTS", args.all_tenants))
@@ -685,6 +693,7 @@ def do_list(cs, args):
             'flavor': args.flavor,
             'status': args.status,
             'host': args.host,
+            'project_id': args.tenant,
             'instance_name': args.instance_name}
 
     id_col = 'ID'
