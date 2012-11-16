@@ -454,6 +454,14 @@ class ShellTest(utils.TestCase):
         self.assert_called('POST', '/servers/1234/action',
                            {'os-resetState': {'state': 'active'}})
 
+    def test_host_list(self):
+        self.run_command('host-list')
+        self.assert_called('GET', '/os-hosts')
+
+    def test_host_list_with_zone(self):
+        self.run_command('host-list --zone nova')
+        self.assert_called('GET', '/os-hosts?zone=nova')
+
     def test_host_update_status(self):
         self.run_command('host-update sample-host_1 --status enabled')
         body = {'status': 'enabled'}
@@ -533,3 +541,15 @@ class ShellTest(utils.TestCase):
     def test_network_show(self):
         self.run_command('network-show 1')
         self.assert_called('GET', '/os-networks/1')
+
+    def test_backup(self):
+        self.run_command('backup sample-server back1 daily 1')
+        self.assert_called('POST', '/servers/1234/action',
+                           {'createBackup': {'name': 'back1',
+                                             'backup_type': 'daily',
+                                             'rotation': '1'}})
+        self.run_command('backup 1234 back1 daily 1')
+        self.assert_called('POST', '/servers/1234/action',
+                           {'createBackup': {'name': 'back1',
+                                             'backup_type': 'daily',
+                                             'rotation': '1'}})

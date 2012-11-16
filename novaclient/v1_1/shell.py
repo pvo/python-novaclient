@@ -199,7 +199,7 @@ def _boot(cs, args, reservation_id=None, min_count=None, max_count=None):
         metavar='<key=value>',
         help="Send arbitrary key/value pairs to the scheduler for custom use.")
 @utils.arg('--nic',
-     metavar="<net-id=net-uuid,v4-fixed-ip=ip-addr>",
+     metavar="<net-id=net-uuid,v4-fixed-ip=ip-addr,port-id=port-uuid>",
      action='append',
      dest='nics',
      default=[],
@@ -341,9 +341,6 @@ def _print_flavor_list(cs, flavors):
 def do_flavor_list(cs, _args):
     """Print a list of available 'flavors' (sizes of servers)."""
     flavors = cs.flavors.list()
-    for flavor in flavors:
-        # int needed for numerical sort
-        flavor.id = int(flavor.id)
     _print_flavor_list(cs, flavors)
 
 
@@ -620,12 +617,12 @@ def do_image_delete(cs, args):
     dest='ip',
     metavar='<ip-regexp>',
     default=None,
-    help='Search with regular expression match by IP address')
+    help='Search with regular expression match by IP address (Admin only).')
 @utils.arg('--ip6',
     dest='ip6',
     metavar='<ip6-regexp>',
     default=None,
-    help='Search with regular expression match by IPv6 address')
+    help='Search with regular expression match by IPv6 address (Admin only).')
 @utils.arg('--name',
     dest='name',
     metavar='<name-regexp>',
@@ -635,7 +632,7 @@ def do_image_delete(cs, args):
     dest='instance_name',
     metavar='<name-regexp>',
     default=None,
-    help='Search with regular expression match by instance name')
+    help='Search with regular expression match by instance name (Admin only).')
 @utils.arg('--instance_name',
     help=argparse.SUPPRESS)
 @utils.arg('--status',
@@ -658,14 +655,15 @@ def do_image_delete(cs, args):
     dest='host',
     metavar='<hostname>',
     default=None,
-    help='Search instances by hostname to which they are assigned')
+    help='Search instances by hostname to which they are assigned '
+         '(Admin only).')
 @utils.arg('--all-tenants',
     dest='all_tenants',
     metavar='<0|1>',
     nargs='?',
     type=int,
     const=1,
-    default=0,
+    default=int(utils.bool_from_str(os.environ.get("ALL_TENANTS", 'false'))),
     help='Display information from all tenants (Admin only).')
 @utils.arg('--all_tenants',
     nargs='?',
@@ -682,9 +680,8 @@ def do_image_delete(cs, args):
     help='Display information from single tenant (Admin only).')
 def do_list(cs, args):
     """List active servers."""
-    all_tenants = int(os.environ.get("ALL_TENANTS", args.all_tenants))
     search_opts = {
-            'all_tenants': all_tenants,
+            'all_tenants': args.all_tenants,
             'reservation_id': args.reservation_id,
             'ip': args.ip,
             'ip6': args.ip6,
@@ -938,6 +935,19 @@ def do_image_create(cs, args):
                              show_progress=False, silent=True)
 
 
+@utils.arg('server', metavar='<server>', help='Name or ID of server.')
+@utils.arg('name', metavar='<name>', help='Name of the backup image.')
+@utils.arg('backup_type', metavar='<backup-type>',
+           help='The backup type, like "daily" or "weekly".')
+@utils.arg('rotation', metavar='<rotation>',
+           help='Int parameter representing how many backups to keep around.')
+def do_backup(cs, args):
+    """ Backup a instance by create a 'backup' type snapshot """
+    _find_server(cs, args.server).backup(args.name,
+                                         args.backup_type,
+                                         args.rotation)
+
+
 @utils.arg('server',
      metavar='<server>',
      help="Name or ID of server")
@@ -1011,10 +1021,15 @@ def do_show(cs, args):
     _print_server(cs, args)
 
 
-@utils.arg('server', metavar='<server>', help='Name or ID of server.')
+@utils.arg('server', metavar='<server>', nargs='+',
+           help='Name or ID of server(s).')
 def do_delete(cs, args):
-    """Immediately shut down and delete a server."""
-    _find_server(cs, args.server).delete()
+    """Immediately shut down and delete specified server(s)."""
+    for server in args.server:
+        try:
+            _find_server(cs, server).delete()
+        except Exception, e:
+            print e
 
 
 def _find_server(cs, server):
@@ -1089,10 +1104,24 @@ def _translate_volume_snapshot_keys(collection):
                 setattr(item, to_key, item._info[from_key])
 
 
+@utils.arg('--all-tenants',
+    dest='all_tenants',
+    metavar='<0|1>',
+    nargs='?',
+    type=int,
+    const=1,
+    default=int(utils.bool_from_str(os.environ.get("ALL_TENANTS", 'false'))),
+    help='Display information from all tenants (Admin only).')
+@utils.arg('--all_tenants',
+    nargs='?',
+    type=int,
+    const=1,
+    help=argparse.SUPPRESS)
 @utils.service_type('volume')
-def do_volume_list(cs, _args):
+def do_volume_list(cs, args):
     """List all the volumes."""
-    volumes = cs.volumes.list()
+    search_opts = {'all_tenants': args.all_tenants}
+    volumes = cs.volumes.list(search_opts=search_opts)
     _translate_volume_keys(volumes)
 
     # Create a list of servers to which the volume is attached
@@ -1149,13 +1178,14 @@ def do_volume_show(cs, args):
 @utils.service_type('volume')
 def do_volume_create(cs, args):
     """Add a new volume."""
-    cs.volumes.create(args.size,
-                        args.snapshot_id,
-                        args.display_name,
-                        args.display_description,
-                        args.volume_type,
-                        args.availability_zone,
-                        imageRef=args.image_id)
+    volume = cs.volumes.create(args.size,
+                               args.snapshot_id,
+                               args.display_name,
+                               args.display_description,
+                               args.volume_type,
+                               args.availability_zone,
+                               imageRef=args.image_id)
+    _print_volume(volume)
 
 
 @utils.arg('volume', metavar='<volume>', help='ID of the volume to delete.')
@@ -1238,10 +1268,11 @@ def do_volume_snapshot_show(cs, args):
 @utils.service_type('volume')
 def do_volume_snapshot_create(cs, args):
     """Add a new snapshot."""
-    cs.volume_snapshots.create(args.volume_id,
-                        args.force,
-                        args.display_name,
-                        args.display_description)
+    snapshot = cs.volume_snapshots.create(args.volume_id,
+                                          args.force,
+                                          args.display_name,
+                                          args.display_description)
+    _print_volume_snapshot(snapshot)
 
 
 @utils.arg('snapshot_id',
@@ -1560,7 +1591,7 @@ def do_secgroup_delete(cs, args):
     nargs='?',
     type=int,
     const=1,
-    default=0,
+    default=int(utils.bool_from_str(os.environ.get("ALL_TENANTS", 'false'))),
     help='Display information from all tenants (Admin only).')
 @utils.arg('--all_tenants',
     nargs='?',
@@ -1569,8 +1600,7 @@ def do_secgroup_delete(cs, args):
     help=argparse.SUPPRESS)
 def do_secgroup_list(cs, args):
     """List security groups for the current tenant."""
-    all_tenants = int(os.environ.get("ALL_TENANTS", args.all_tenants))
-    search_opts = {'all_tenants': all_tenants}
+    search_opts = {'all_tenants': args.all_tenants}
     _print_secgroups(cs.security_groups.list(search_opts=search_opts))
 
 
@@ -1929,10 +1959,13 @@ def do_host_describe(cs, args):
     utils.print_list(result, columns)
 
 
+@utils.arg('--zone', metavar='<zone>', default=None,
+           help='Filters the list, returning only those '
+                'hosts in the availability zone <zone>.')
 def do_host_list(cs, args):
     """List all hosts by service"""
-    columns = ["host_name", "service"]
-    result = cs.hosts.list_all()
+    columns = ["host_name", "service", "zone"]
+    result = cs.hosts.list_all(args.zone)
     utils.print_list(result, columns)
 
 

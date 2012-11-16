@@ -25,7 +25,8 @@ class FakeClient(fakes.FakeClient, client.Client):
 
     def __init__(self, *args, **kwargs):
         client.Client.__init__(self, 'username', 'password',
-                               'project_id', 'auth_url')
+                               'project_id', 'auth_url',
+                               extensions=kwargs.get('extensions'))
         self.client = FakeHTTPClient(**kwargs)
 
 
@@ -66,6 +67,53 @@ class FakeHTTPClient(base_client.HTTPClient):
             return httplib2.Response(status), body
         else:
             return httplib2.Response({"status": status}), body
+
+    #
+    # List all extensions
+    #
+
+    def get_extensions(self, **kw):
+        exts = [
+            {
+                "alias": "NMN",
+                "description": "Multiple network support",
+                "links": [],
+                "name": "Multinic",
+                "namespace": ("http://docs.openstack.org/"
+                              "compute/ext/multinic/api/v1.1"),
+                "updated": "2011-06-09T00:00:00+00:00"
+            },
+            {
+                "alias": "OS-DCF",
+                "description": "Disk Management Extension",
+                "links": [],
+                "name": "DiskConfig",
+                "namespace": ("http://docs.openstack.org/"
+                              "compute/ext/disk_config/api/v1.1"),
+                "updated": "2011-09-27T00:00:00+00:00"
+            },
+            {
+                "alias": "OS-EXT-SRV-ATTR",
+                "description": "Extended Server Attributes support.",
+                "links": [],
+                "name": "ExtendedServerAttributes",
+                "namespace": ("http://docs.openstack.org/"
+                              "compute/ext/extended_status/api/v1.1"),
+                "updated": "2011-11-03T00:00:00+00:00"
+            },
+            {
+                "alias": "OS-EXT-STS",
+                "description": "Extended Status support",
+                "links": [],
+                "name": "ExtendedStatus",
+                "namespace": ("http://docs.openstack.org/"
+                              "compute/ext/extended_status/api/v1.1"),
+                "updated": "2011-11-03T00:00:00+00:00"
+            },
+        ]
+        return (200, {
+            "extensions": exts,
+        })
 
     #
     # Limits
@@ -345,6 +393,10 @@ class FakeHTTPClient(base_client.HTTPClient):
             assert body[action].keys() == ['name']
         elif action == 'removeSecurityGroup':
             assert body[action].keys() == ['name']
+        elif action == 'createBackup':
+            assert set(body[action].keys()) == set(['name',
+                                                    'backup_type',
+                                                    'rotation'])
         else:
             raise AssertionError("Unexpected server action: %s" % action)
         return (resp, _body)
@@ -829,6 +881,16 @@ class FakeHTTPClient(base_client.HTTPClient):
                   'cpu': 1, 'memory_mb': 2048, 'disk_gb': 30}},
                  {'resource': {'project': 'admin', 'host': 'dummy',
                   'cpu': 1, 'memory_mb': 2048, 'disk_gb': 30}}]})
+
+    def get_os_hosts(self, **kw):
+        zone = kw.get('zone', 'nova1')
+        return (200, {'hosts':
+                    [{'host': 'host1',
+                      'service': 'nova-compute',
+                      'zone': zone},
+                     {'host': 'host1',
+                      'service': 'nova-cert',
+                      'zone': zone}]})
 
     def get_os_hosts_sample_host(self, *kw):
         return (200, {'host': [{'resource': {'host': 'sample_host'}}], })

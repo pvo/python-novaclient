@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import StringIO
 
 from novaclient import exceptions
@@ -51,6 +53,38 @@ class ServersTest(utils.TestCase):
             flavor=1,
             meta={'foo': 'bar'},
             userdata=StringIO.StringIO('hello moto'),
+            files={
+                '/etc/passwd': 'some data',                 # a file
+                '/tmp/foo.txt': StringIO.StringIO('data'),   # a stream
+            },
+        )
+        cs.assert_called('POST', '/servers')
+        self.assertTrue(isinstance(s, servers.Server))
+
+    def test_create_server_userdata_unicode(self):
+        s = cs.servers.create(
+            name="My server",
+            image=1,
+            flavor=1,
+            meta={'foo': 'bar'},
+            userdata=u'こんにちは',
+            key_name="fakekey",
+            files={
+                '/etc/passwd': 'some data',                 # a file
+                '/tmp/foo.txt': StringIO.StringIO('data'),   # a stream
+            },
+        )
+        cs.assert_called('POST', '/servers')
+        self.assertTrue(isinstance(s, servers.Server))
+
+    def test_create_server_userdata_utf8(self):
+        s = cs.servers.create(
+            name="My server",
+            image=1,
+            flavor=1,
+            meta={'foo': 'bar'},
+            userdata='こんにちは',
+            key_name="fakekey",
             files={
                 '/etc/passwd': 'some data',                 # a file
                 '/tmp/foo.txt': StringIO.StringIO('data'),   # a stream
@@ -228,6 +262,13 @@ class ServersTest(utils.TestCase):
         s.unlock()
         cs.assert_called('POST', '/servers/1234/action')
         cs.servers.unlock(s)
+        cs.assert_called('POST', '/servers/1234/action')
+
+    def test_backup(self):
+        s = cs.servers.get(1234)
+        s.backup('back1', 'daily', 1)
+        cs.assert_called('POST', '/servers/1234/action')
+        cs.servers.backup(s, 'back1', 'daily', 2)
         cs.assert_called('POST', '/servers/1234/action')
 
     def test_get_console_output_without_length(self):

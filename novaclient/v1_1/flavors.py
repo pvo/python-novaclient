@@ -5,6 +5,7 @@ Flavor interface.
 
 from novaclient import base
 from novaclient import exceptions
+from novaclient import utils
 
 
 class Flavor(base.Resource):
@@ -118,13 +119,51 @@ class FlavorManager(base.ManagerWithFind):
         :rtype: :class:`Flavor`
         """
 
+        try:
+            ram = int(ram)
+        except:
+            raise exceptions.CommandError("Ram must be an integer.")
+
+        try:
+            vcpus = int(vcpus)
+        except:
+            raise exceptions.CommandError("VCPUs must be an integer.")
+
+        try:
+            disk = int(disk)
+        except:
+            raise exceptions.CommandError("Disk must be an integer.")
+
+        if flavorid == "auto":
+            flavorid = None
+
+        try:
+            swap = int(swap)
+        except:
+            raise exceptions.CommandError("Swap must be an integer.")
+
+        try:
+            ephemerel = int(ephemeral)
+        except:
+            raise exceptions.CommandError("Ephemerel must be an integer.")
+
+        try:
+            rxtx_factor = int(rxtx_factor)
+        except:
+            raise exceptions.CommandError("rxtx_factor must be an integer.")
+
+        try:
+            is_public = utils.bool_from_str(is_public)
+        except:
+            raise exceptions.CommandError("is_public must be a boolean.")
+
         body = {
             "flavor": {
                 "name": name,
                 "ram": int(ram),
                 "vcpus": int(vcpus),
                 "disk": int(disk),
-                "id": int(flavorid),
+                "id": flavorid,
                 "swap": int(swap),
                 "OS-FLV-EXT-DATA:ephemeral": int(ephemeral),
                 "rxtx_factor": int(rxtx_factor),
