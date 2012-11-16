@@ -23,7 +23,7 @@ except ImportError:
 has_keyring = False
 try:
     import keyring
-    has_keyring = True
+    has_keyring = False
 except ImportError:
     pass
 
